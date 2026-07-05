@@ -15,7 +15,3 @@ vllm-sr.log
 
 # Local model weights (download separately)
 models/
-
-# Local environment-specific configs
-config.yaml
-config.custom.yaml

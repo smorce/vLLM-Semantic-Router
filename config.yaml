@@ -1,0 +1,242 @@
+version: v0.1
+
+listeners:
+  - name: "http-8801"
+    address: "0.0.0.0"
+    port: 8801
+    timeout: "300s"
+
+# -----------------------------
+# Global models / plugins config
+# -----------------------------
+
+# Embedding routing uses a BERT/embedding model for similarity.
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# Semantic Cache (global default)
+semantic_cache:
+  enabled: true
+  backend_type: "memory"          # memory / milvus（redisは未実装の注意あり）
+  similarity_threshold: 0.82      # グローバルの基準（decisionで上書き可）
+  max_entries: 5000
+  ttl_seconds: 3600
+  eviction_policy: "lru"
+  # use_hnsw: true
+  # hnsw_m: 16
+  # hnsw_ef_construction: 200
+
+# Jailbreak Detection (global prompt guard)
+prompt_guard:
+  enabled: true
+  threshold: 0.7                 # false positive が多ければ上げる（例: 0.8）
+  use_cpu: true
+
+# PII Detection (global classifier)
+classifier:
+  pii_model:
+    enabled: true
+    threshold: 0.95               # PIIは高めが推奨（誤検知を減らす）
+    use_cpu: true
+
+# -----------------------------
+# Signals
+# -----------------------------
+signals:
+  keywords:
+    - name: "tool_or_hard_keywords"
+      operator: "OR"
+      case_sensitive: false
+      keywords:
+        - "検索"
+        - "調べて"
+        - "最新"
+        - "URL"
+        - "API"
+        - "ツール"
+        - "tool"
+        - "function"
+        - "呼び出し"
+        - "実行して"
+        - "設計"
+        - "原因"
+        - "分析"
+        - "比較"
+        - "提案"
+
+  embeddings:
+    - name: "simple_ja"
+      threshold: 0.72
+      candidates:
+        - "こんにちは"
+        - "短く答えて"
+        - "要約して"
+        - "雑談"
+      aggregation_method: "max"
+
+    - name: "hard_or_tool_ja"
+      threshold: 0.70
+      candidates:
+        - "ウェブで調べて根拠を付けて"
+        - "ツールやAPIを呼び出して作業して"
+        - "複雑な条件で比較して提案して"
+      aggregation_method: "max"
+
+  domains:
+    - name: "computer_science"
+      description: "Programming / CS"
+      mmlu_categories:
+        - "computer_security"
+        - "machine_learning"
+
+  fact_check:
+    - name: "needs_verification"
+      description: "Likely needs factual verification."
+
+  user_feedbacks:
+    - name: "correction_needed"
+      description: "User indicates previous answer was wrong / asks for correction."
+
+  preferences:
+    - name: "hard_or_tool"
+      description: "難しい推論やツール呼び出しが必要そう"
+    - name: "easy"
+      description: "簡単な返答や雑談"
+
+# -----------------------------
+# Decisions (+ plugins)
+# -----------------------------
+decisions:
+  - name: "feedback_to_gpt"
+    description: "ユーザーの訂正要求はGPTへ送る"
+    priority: 300
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "correction_needed"
+    modelRefs:
+      - model: "gpt-oss:20b"
+        use_reasoning: true
+    plugins:
+      # セキュリティ系は基本ON
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed:
+            - "LOCATION"
+            - "DATE_TIME"
+            - "ORGANIZATION"
+      # プライバシー/機密が混ざりやすいのでキャッシュはOFF
+      # enabled: false なので、GPT OSS に行く判断が下された時点で、同一プロンプトでもセマンティックキャッシュは効きません（毎回 upstream に投げます）。
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+
+  - name: "hard_or_tool_to_gpt"
+    description: "難しい推論やツール指示はGPTへ送る"
+    priority: 200
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "tool_or_hard_keywords"
+        - type: "embedding"
+          name: "hard_or_tool_ja"
+        - type: "domain"
+          name: "computer_science"
+        - type: "fact_check"
+          name: "needs_verification"
+        - type: "preference"
+          name: "hard_or_tool"
+    modelRefs:
+      - model: "gpt-oss:20b"
+        use_reasoning: true
+    plugins:
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed:
+            - "LOCATION"
+            - "DATE_TIME"
+            - "ORGANIZATION"
+      # semantic-cache を 完全 OFF → 高しきい値で ON に変える。まずは 0.90〜0.95 くらいで「同一に近い質問だけ」拾う
+      # 0.92 未満ならキャッシュミスになり、通常どおり LLM に転送して推論し、その結果をキャッシュに保存します。類似度が 0.92 以上のときだけキャッシュヒットして即返す。
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+          ttl_seconds: 600
+          max_entries: 1000
+
+  - name: "default_to_fast"
+    description: "それ以外はFASTモデルへ送る"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "simple_ja"
+        - type: "preference"
+          name: "easy"
+    modelRefs:
+      - model: "LiquidAI/LFM2.5-1.2B-JP"
+        use_reasoning: false
+    plugins:
+      # Fast系はキャッシュを積極的に使ってレイテンシを下げる
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.78
+      # “軽い雑談”にも最低限の安全をかけたいならON
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed:
+            - "LOCATION"
+            - "DATE_TIME"
+            - "ORGANIZATION"
+
+# -----------------------------
+# Providers (backends)
+# -----------------------------
+providers:
+  models:
+    - name: "LiquidAI/LFM2.5-1.2B-JP"
+      param_size: "1.2b"
+      endpoints:
+        - name: "vllm_fast"
+          weight: 1
+          endpoint: "172.17.0.1:3849"
+          protocol: "http"
+      access_key: ""
+
+    - name: "gpt-oss:20b"
+      reasoning_family: "gpt-oss"
+      param_size: "20b"
+      endpoints:
+        - name: "ollama_gpt"
+          weight: 1
+          endpoint: "172.25.240.1:11434"
+          protocol: "http"
+      access_key: ""
+
+  default_model: "LiquidAI/LFM2.5-1.2B-JP"
+
+  reasoning_families:
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  default_reasoning_effort: "low"
