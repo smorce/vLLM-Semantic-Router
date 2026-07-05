@@ -95,45 +95,70 @@ set UV_LINK_MODE=copy && uv run python script.py
 
 ---
 
-## 5. Gitルール (Git Rules)
+# vLLM Semantic Router Agent Entry
 
-*   コミットプレフィックスは以下の通りです:
-    *   `feat:` 新機能の追加または機能の変更
-    *   `fix:` バグ修正や誤字の訂正
-    *   `docs:` ドキュメントの追加
-    *   `style:` フォーマットの変更、インポート順序の調整、コメントの追加など (コードの動作に影響しないもの)
-    *   `refactor:` 機能に影響を与えないコードのリファクタリング
-    *   `test:` テストの追加または修正
-    *   `ci:` CI/CD に関連する変更
-    *   `docker:` Dockerfile やコンテナ関連の変更
-    *   `chore:` その他の雑多な変更 (ビルドプロセス、補助ツールなど)
-*   Pull Request (PR) のメッセージを作成するときは、メッセージに改行を含めず、一つの連続したメッセージとして記述してください。
+This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [docs/agent/README.md](docs/agent/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
 
----
+## Read First
 
-## ショートカットエイリアス (Shortcut Alias)
+1. [docs/agent/README.md](docs/agent/README.md)
+2. [docs/agent/repo-map.md](docs/agent/repo-map.md)
+3. [docs/agent/environments.md](docs/agent/environments.md)
+4. [docs/agent/change-surfaces.md](docs/agent/change-surfaces.md)
+5. `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
 
-以下のエイリアスを使用して、特定の対話モードやアクションを指示できます。
+## Native Discovery vs Routed Context
 
-*   `/ask:` ユーザーがポリシー決定や戦略に関する相談を求めています。タスク実行を一時停止し、多角的な分析と提案で応答してください。明確な指示があるまでタスクは進めません。
-*   `/plan:` 作業計画 (`<タスク分析>`を含む) を明確かつ徹底的に概説し、ユーザーとの間で矛盾がないか確認します。合意が得られた場合にのみ実行に進みます。
-*   `/architecture:` 要求された変更について深く検討し、既存コードを分析し、必要な変更範囲を特定します。システムの制約、規模、パフォーマンス、要件を考慮した設計のトレードオフ分析 (5段落程度) を生成します。分析に基づき4～6個の明確化質問を行い、回答を得た上で包括的なシステム設計アーキテクチャ案を作成し、承認を求めます。フィードバックがあれば対話し、計画を修正して再承認を求めます。承認後、実装計画を立て、再度承認を得てから実行します。各ステップ完了時に進捗と次のステップを報告します。
-*   `/debug:` バグの根本原因特定を支援します。考えられる原因を5～7個リストアップし、有力な1～2個に絞り込みます。ログなどを活用して仮説を検証し、修正を適用する前に報告します。
-*   `/cmt:` 特定のコード箇所について、意図を明確にするためのコメントやドキュメントを追加します。既存のコードフォーマットやスタイルに従います。
-*   `/log:` 適切なログレベル（例: DEBUG, INFO, WARN, ERROR）を考慮し、必要な情報のみを記録するログ出力を追加・修正します。ログは簡潔にし、冗長性を避けます。既存のコードフォーマットに従います。
-*   `/generateDocument:` 作業したコードを整理して、余計な部分を取り除き、とても分かりやすくドキュメント化してください。
-*   `/RemoveSlop:` Check the diff against main, and remove all AI generated slop introduced in this branch.
+- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
+- Full task routing, primary-skill resolution, local-rule surfacing, loop-mode guidance, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
+- `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
 
-This includes:
-- Extra comments that a human wouldn't add or is inconsistent with the rest of the file
-- Extra defensive checks or try/catch blocks that are abnormal for that area of the codebase (especially if called by trusted / validated codepaths)
-- Casts to any to get around type issues
-- Any other style that is inconsistent with the file
+If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/recipes/balance.yaml](deploy/recipes/balance.yaml).
 
-Report at the end with only a 1-3 sentence summary of what you changed
-*   `/codeReview:` 1. Please analyze the codebase in this repository in detail along the following three axes:
-   1-1. Performance
-   1-2. Cleanliness
-   1-3. Security
-2. Evaluate what level each axis is at.
-3. If there are points that need improvement, summarize them in a markdown format document and save it.
+## Supported Environments
+
+- `cpu-local`: `make vllm-sr-dev`, then `vllm-sr serve --image-pull-policy never`
+- `amd-local`: `make vllm-sr-dev VLLM_SR_PLATFORM=amd`, then `vllm-sr serve --image-pull-policy never --platform amd`
+- `ci-k8s`: `make e2e-test`
+
+## Non-Negotiable Rules
+
+- Use the local image flow for local-dev behavior. Do not invent another serve path.
+- Start from one project-level primary skill. Cross-cutting guidance belongs in change surfaces, canonical docs, or maintainer support skills.
+- Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
+- Use `make agent-pr-gate` when you need a repo-native local reproduction of the baseline PR requirements.
+- Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
+- Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
+- Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
+- Maintainer release, issue, PR, stale-work, and daily-board workflows live in [docs/agent/maintainer-ops.md](docs/agent/maintainer-ops.md) and write local state only under `.agent-harness/maintainer/` unless an explicit reviewed apply step mutates GitHub.
+- Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
+- If the work needs multiple resumable loops across sessions or contributors, use the indexed current execution plans under [docs/agent/plans/README.md](docs/agent/plans/README.md) instead of ad hoc task notes. Historical plans are not kept in the current tree.
+- If the desired architecture and the current implementation still diverge after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md) instead of leaving the gap only in chat or PR text.
+- Keep modules narrow: one main responsibility per file, small orchestrators plus helpers, interfaces only at seams.
+- Legacy hotspots are debt, not precedent. Touched hotspot files must not grow in responsibility; prefer extraction-first edits.
+- Read the nearest local `AGENTS.md` before editing hotspot trees under `src/semantic-router/pkg/config/`, `src/semantic-router/pkg/extproc/`, `src/vllm-sr/cli/`, `src/fleet-sim/fleet_sim/optimizer/`, `deploy/operator/api/v1alpha1/`, `deploy/operator/controllers/`, `dashboard/frontend/src/`, `dashboard/frontend/src/pages/`, `dashboard/frontend/src/components/`, and `dashboard/backend/handlers/`.
+
+## Canonical Commands
+
+- `make agent-bootstrap`
+- `make agent-validate`
+- `make agent-scorecard`
+- `make agent-dev ENV=cpu|amd`
+- `make agent-serve-local ENV=cpu|amd`
+- `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
+- `make agent-lint CHANGED_FILES="..."`
+- `make agent-ci-gate CHANGED_FILES="..."`
+- `make agent-pr-gate`
+- `make test-and-build-local`
+- `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`
+- `make agent-e2e-affected CHANGED_FILES="..."`
+
+## Rule Layers
+
+- Entry and navigation: [docs/agent/README.md](docs/agent/README.md), [docs/agent/governance.md](docs/agent/governance.md)
+- Architecture and boundaries: [docs/agent/architecture-guardrails.md](docs/agent/architecture-guardrails.md), nearest local `AGENTS.md`
+- Testing and done criteria: [docs/agent/feature-complete-checklist.md](docs/agent/feature-complete-checklist.md)
+- Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/e2e-profile-map.yaml](tools/agent/e2e-profile-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
+- Maintainer ops: [docs/agent/maintainer-ops.md](docs/agent/maintainer-ops.md), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml)
+
+Temporary working notes can exist when needed, but they are not part of the canonical harness unless promoted into the docs or executable rule layer above.

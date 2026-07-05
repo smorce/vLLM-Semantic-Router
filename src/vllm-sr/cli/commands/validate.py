@@ -1,0 +1,143 @@
+"""Validate command implementation."""
+
+import sys
+
+from cli.parser import ConfigParseError, parse_user_config
+from cli.utils import get_logger
+from cli.validator import print_validation_errors, validate_user_config
+
+log = get_logger(__name__)
+
+_SIGNAL_SUMMARY_FIELDS = (
+    ("Keyword signals", "keywords"),
+    ("Embedding signals", "embeddings"),
+    ("Domains", "domains"),
+    ("Fact check signals", "fact_check"),
+    ("User feedback signals", "user_feedbacks"),
+    ("Reask signals", "reasks"),
+    ("Preference signals", "preferences"),
+    ("Language signals", "language"),
+    ("Context signals", "context"),
+    ("Structure signals", "structure"),
+    ("Complexity signals", "complexity"),
+    ("Modality signals", "modality"),
+    ("Authz signals", "role_bindings"),
+    ("Jailbreak signals", "jailbreak"),
+    ("PII signals", "pii"),
+    ("Knowledge-base signals", "kb"),
+    ("Conversation signals", "conversation"),
+    ("Event signals", "events"),
+)
+
+
+def _count_items(value) -> int:
+    return len(value or [])
+
+
+def _signal_summary_lines(signals) -> list[str]:
+    """Return non-empty signal summary lines for the canonical v0.3 surface."""
+    if not signals:
+        return []
+
+    lines = []
+    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
+        count = _count_items(getattr(signals, field_name, None))
+        if count > 0:
+            lines.append(f"  {label}: {count}")
+    return lines
+
+
+def _projection_summary_lines(projections) -> list[str]:
+    if not projections:
+        return []
+
+    lines = []
+    for label, field_name in (
+        ("Projection partitions", "partitions"),
+        ("Projection scores", "scores"),
+        ("Projection mappings", "mappings"),
+    ):
+        count = _count_items(getattr(projections, field_name, None))
+        if count > 0:
+            lines.append(f"  {label}: {count}")
+    return lines
+
+
+def validate_command(config_path: str):
+    """
+    Validate user configuration.
+
+    Args:
+        config_path: Path to user config.yaml
+    """
+    log.info("=" * 60)
+    log.info("vLLM Semantic Router - Validate Configuration")
+    log.info("=" * 60)
+    log.info(f"Validating: {config_path}")
+    log.info("")
+
+    # Parse config
+    try:
+        user_config = parse_user_config(config_path)
+    except ConfigParseError as e:
+        log.error("\n❌ Configuration parsing failed:")
+        log.error(f"{e}")
+        sys.exit(1)
+
+    # Validate config
+    errors = validate_user_config(user_config)
+
+    if errors:
+        print_validation_errors(errors)
+        sys.exit(1)
+
+    log.info("=" * 60)
+    log.info("Configuration is valid!")
+    log.info("=" * 60)
+    log.info("\nConfiguration summary:")
+    log.info(f"  Version: {user_config.version}")
+    log.info(f"  Listeners: {len(user_config.listeners)}")
+
+    signal_lines = _signal_summary_lines(user_config.signals)
+    if signal_lines:
+        for line in signal_lines:
+            log.info(line)
+    else:
+        log.info(
+            "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
+        )
+
+    for line in _projection_summary_lines(user_config.routing.projections):
+        log.info(line)
+
+    log.info(f"  Decisions: {len(user_config.decisions)}")
+
+    # Count plugins
+    total_plugins = 0
+    plugins_by_type = {}
+    decisions_with_plugins = 0
+    for decision in user_config.decisions:
+        if decision.plugins:
+            decisions_with_plugins += 1
+            for plugin in decision.plugins:
+                total_plugins += 1
+                plugin_type = (
+                    plugin.type.value
+                    if hasattr(plugin.type, "value")
+                    else str(plugin.type)
+                )
+                plugins_by_type[plugin_type] = plugins_by_type.get(plugin_type, 0) + 1
+
+    if total_plugins > 0:
+        log.info(
+            f"  Plugins: {total_plugins} total ({decisions_with_plugins} decisions)"
+        )
+        if len(plugins_by_type) > 0:
+            plugin_types_str = ", ".join(
+                f"{ptype}: {count}" for ptype, count in sorted(plugins_by_type.items())
+            )
+            log.info(f"    Types: {plugin_types_str}")
+
+    log.info(f"  Models: {len(user_config.providers.models)}")
+    log.info(f"  Default model: {user_config.providers.default_model}")
+    log.info("")

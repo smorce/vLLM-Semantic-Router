@@ -39,7 +39,6 @@ openvino-binding/
 paper/
 perf/
 scripts/
-src/
 tools/
 website/
 .crd-ref-docs.yaml
