@@ -1,0 +1,9 @@
+[project]
+name = "vllm-semantic-router"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "vllm-sr>=0.1.0b2.dev20260126191646",
+]

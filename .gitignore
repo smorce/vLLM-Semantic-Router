@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# vLLM-SR runtime data
+.vllm-sr/
+vllm-sr.log
+
+# Local model weights (download separately)
+models/
+
+# Local environment-specific configs
+config.yaml
+config.custom.yaml
