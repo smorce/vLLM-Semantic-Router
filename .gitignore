@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.venv-agent/
 
 # vLLM-SR runtime data
 .vllm-sr/
@@ -15,3 +16,46 @@ vllm-sr.log
 
 # Local model weights (download separately)
 models/
+
+# Private local notes
+*[見ないでください]*
+
+# config/ 以下は運用 YAML のみ追跡（upstream 付属の fragment は除外）
+config/*
+!config/config.yaml
+
+# ローカルに展開した vLLM Semantic Router upstream ツリー（別途 clone して利用）
+.agents/
+bench/
+candle-binding/
+dashboard/
+deploy/
+docs/
+e2e/
+ml-binding/
+nlp-binding/
+onnx-binding/
+openvino-binding/
+paper/
+perf/
+scripts/
+src/
+tools/
+website/
+.crd-ref-docs.yaml
+.cursorrules
+.dockerignore
+.editorconfig
+.gitattributes
+.opencode.yaml
+.pre-commit-config.yaml
+.prowlabels.yaml
+.security-scan-allowlist
+CODEOWNERS
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+GOVERNANCE.md
+LICENSE
+Makefile
+OWNER
+install.sh
