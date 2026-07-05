@@ -1,3 +1,5 @@
+https://github.com/smorce/vLLM-Semantic-Router
+
 ## 起動コマンド
 ```
 UV_LINK_MODE=copy uv run vllm-sr serve --config config.yaml
