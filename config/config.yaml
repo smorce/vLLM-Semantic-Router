@@ -630,10 +630,10 @@ routing:
           source: models
           models:
             - model: lfm2.5-1.2b-jp
-              lora_name: business-adapter
+              # business-adapter 等の lora_name はバックエンドにロード済みのときのみ指定する。
               weight: 1.0
               use_reasoning: false
-              reasoning_description: DSL 作成時の candidate iteration を網羅するための参照モデル。
+              reasoning_description: 静的ビジネスルートの候補（ベースモデル lfm を使用）。
               reasoning_effort: low
           outputs:
             - type: model
@@ -818,7 +818,13 @@ routing:
           use_reasoning: true
           reasoning_description: 統合・要約には最も強いテキストモデルを使う。
           reasoning_effort: high
-          lora_name: computer-science-expert
+          # lora_name は実際に vLLM/llama-server にロード済みのアダプターがある場合のみ指定する。
+          # computer-science-expert は modelCards 上の論理名であり、未ロードのまま指定すると
+          # upstream へその名前が渡り vLLM が 404 (NotFoundError) を返す。
+          # 将来 LoRA を使う場合は、以下の手順を踏む必要がある。
+          # 1. vLLM / llama-server にアダプターを実際にロードする
+          # 2. その名前を providers.models またはバックエンドのモデル一覧と一致させる
+          # 3. そのうえで lora_name を再度付ける
           weight: 0.5
         - model: lfm2.5-1.2b-jp
           use_reasoning: true
