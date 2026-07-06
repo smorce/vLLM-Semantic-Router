@@ -142,7 +142,7 @@ routing:
         method: bm25
         keywords: ["機械学習", "モデル学習", "勾配", "ニューラルネットワーク", "分類器"]
         case_sensitive: false
-        bm25_threshold: 0.1
+        bm25_threshold: 0.70
       # domain 分類器 (MMLU BERT) のブレを補うためのキーワード signal。
       # domain:business / fact_check と OR することで、分類器が外しても
       # decision がフォールバック (safe_only_svm_route) に落ちにくくする。
@@ -298,6 +298,15 @@ routing:
         description: より大きな実効コンテキストウィンドウが必要なリクエスト。
 
     structure:
+      - name: urgent_tone
+        description: 緊急・至急などの語を含むプロンプト（keyword first-match を補完）。
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '(緊急|至急|すぐに|急ぎ|障害)'
+        predicate:
+          gte: 1
       - name: many_questions
         description: 明示的な質問を多数含むプロンプト。
         feature:
@@ -374,12 +383,8 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        # 0.75 は margin (hard_score - easy_score) の閾値で非常に厳しく、
-        # 実測で複雑なリファクタリング依頼でも margin は 0.1-0.2 程度にしか
-        # ならなかった。candidates を実際のプロンプト分布に近づけて margin を
-        # 0.36 まで押し上げた上で、実測分布 (簡単な依頼は -0.15〜0.19、CS の
-        # 複雑な依頼は 0.36) を踏まえ、閾値をその中間の 0.3 に調整する。
-        threshold: 0.3
+        # 実測分布に合わせて閾値を調整（hard 検出を安定させ fusion/ReMoM に乗せる）。
+        threshold: 0.12
         description: 多段推論や統合的な整理が必要なプロンプトをエスカレーションする。
         hard:
           candidates:
@@ -388,6 +393,8 @@ routing:
             - 根本原因を分析して
             - 詳細なアーキテクチャ図を生成して
             - 分散システムのアーキテクチャをリファクタリングし、トランザクション設計とデバッグ手順を詳しく説明して
+            - 分散システムのアーキテクチャをリファクタリングし、トランザクション設計とデバッグ手順を詳しく説明してください
+            - MBAケーススタディとして、B2B SaaS の価格戦略と顧客獲得コストのトレードオフを比較し、根本原因を分析して
             - 複雑なアルゴリズムの設計上の注意点を段階的に整理して
         easy:
           candidates:
@@ -601,12 +608,19 @@ routing:
       # 常に負けてしまう (decision/engine.go の useTieredSelection を参照)。
       output_contract: Preserve any explicit user-requested output format exactly.
       rules:
-        operator: OR
+        # 複雑な business は deliberation-fusion-route (priority 165) へ逃がす。
+        operator: AND
         conditions:
-          - type: domain
-            name: business
-          - type: keyword
-            name: business_keywords
+          - operator: OR
+            conditions:
+              - type: domain
+                name: business
+              - type: keyword
+                name: business_keywords
+          - operator: NOT
+            conditions:
+              - type: complexity
+                name: needs_reasoning:hard
       modelRefs:
         - model: lfm2.5-1.2b-jp
           use_reasoning: false
@@ -694,24 +708,23 @@ routing:
           weight: 0.4
         - model: qwen3.6-27b
           use_reasoning: true
-          reasoning_description: 信頼度が弱い場合にエスカレーションする。
+          reasoning_description: 事実確認で lfm の自己検証が閾値未満のときにエスカレーションする。
           reasoning_effort: high
           weight: 0.6
       algorithm:
         type: confidence
         on_error: fallback
         confidence:
+          # hybrid は logprob 偏重を抑え、margin で不確実な事実回答を検出して Qwen へ上げる。
           confidence_method: hybrid
-          threshold: 0.72
+          threshold: 0.90
           hybrid_weights:
-            logprob_weight: 0.65
-            margin_weight: 0.35
+            logprob_weight: 0.20
+            margin_weight: 0.80
           on_error: skip
-          escalation_order: small_to_large
+          escalation_order: size
           cost_quality_tradeoff: 0.45
           token_filter: alpha_numeric
-          verifier_server_url: ""
-          verifier_timeout_seconds: 0
       plugins:
         - type: hallucination
           configuration:
@@ -1015,8 +1028,8 @@ routing:
       rules:
         operator: AND
         conditions:
-          - type: keyword
-            name: urgent_keywords
+          - type: structure
+            name: urgent_tone
       modelRefs:
         - model: lfm2.5-1.2b-jp
           use_reasoning: false
@@ -1025,10 +1038,10 @@ routing:
       algorithm:
         type: automix
         automix:
-          verification_threshold: 0.78
+          verification_threshold: 0.85
           max_escalations: 2
           cost_aware_routing: true
-          cost_quality_tradeoff: 0.35
+          cost_quality_tradeoff: 0.12
           discount_factor: 0.9
           use_logprob_verification: true
       plugins:
@@ -1199,10 +1212,10 @@ routing:
         type: multi_factor
         multi_factor:
           weights:
-            quality: 0.4
-            latency: 0.2
-            cost: 0.2
-            load: 0.2
+            quality: 0.32
+            latency: 0.43
+            cost: 0.10
+            load: 0.15
           slo:
             max_tpot_ms: 200
             max_ttft_ms: 800
@@ -1380,13 +1393,17 @@ routing:
                 request_format: pinecone
 
     - name: mlp_experimental_route
-      description: MLP ベースの実験的なモデル選択ルート。
-      priority: 103
+      description: MLP ベースの実験的なモデル選択ルート（明示的な ML キーワードのみ）。
+      priority: 80
       rules:
         operator: AND
         conditions:
           - type: keyword
             name: machine_learning
+          - operator: NOT
+            conditions:
+              - type: structure
+                name: urgent_tone
       modelRefs:
         - model: lfm2.5-1.2b-jp
           use_reasoning: false

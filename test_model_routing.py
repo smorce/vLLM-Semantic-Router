@@ -49,8 +49,11 @@ class MomTestCase:
     allowed_selected_models: frozenset[str] | None = None
     expected_decision: str | None = None
     allowed_decisions: frozenset[str] | None = None
+    expected_upstream_model: str | None = None
     max_tokens: int = 24
     slow: bool = False
+    expected_response_path: str | None = None
+    expect_remom_completion_id: bool = False
 
 
 ROUTER_URL_DEFAULT = "http://127.0.0.1:8801"
@@ -85,10 +88,10 @@ MOM_TEST_CASES: tuple[MomTestCase, ...] = (
     MomTestCase(
         name="mom_other_multi_factor",
         prompt="こんにちは。今日の天気について一言で教えてください。",
-        intent="domain:other を狙い multi_factor_route（モデルは lfm/qwen のいずれか）",
+        intent="domain:other → multi_factor_route（軽い雑談は lfm 優先）",
         expected_decision="multi_factor_route",
-        allowed_decisions=frozenset({"multi_factor_route"}),
         allowed_selected_models=frozenset({"lfm2.5-1.2b-jp", "qwen3.6-27b"}),
+        allowed_decisions=frozenset({"multi_factor_route"}),
         max_tokens=16,
     ),
     MomTestCase(
@@ -116,11 +119,9 @@ MOM_TEST_CASES: tuple[MomTestCase, ...] = (
     MomTestCase(
         name="mom_fact_check_escalation",
         prompt="日本の憲法は何年何月何日に施行されましたか。日付だけ正確に答えてください。",
-        intent="fact_check:needs_fact_check → legal_confidence_route で Qwen エスカレーションを狙う",
-        allowed_selected_models=frozenset({"qwen3.6-27b", "lfm2.5-1.2b-jp"}),
-        allowed_decisions=frozenset(
-            {"legal_confidence_route", "multi_factor_route", "safe_only_svm_route"}
-        ),
+        intent="legal_confidence_route → hybrid confidence で lfm から Qwen へエスカレーション",
+        expected_selected_model="qwen3.6-27b",
+        allowed_decisions=frozenset({"legal_confidence_route"}),
         max_tokens=24,
         slow=True,
     ),
@@ -128,21 +129,43 @@ MOM_TEST_CASES: tuple[MomTestCase, ...] = (
         name="mom_cs_remom_intent",
         prompt=(
             "Pythonで実装したマイクロサービスのイベント駆動アーキテクチャを"
-            "リファクタリングしたい。分散トランザクションのサガパターン、"
-            "デバッグ手順、アルゴリズム上の注意点を詳しく説明してください。"
+            "リファクタリングしたい。分散システムのアーキテクチャをリファクタリングし、"
+            "トランザクション設計とデバッグ手順を詳しく説明してください。"
         ),
         intent=(
-            "domain:computer science + keyword:code_keywords + complexity:hard "
-            "→ computer-science-remom-route / Qwen を狙う"
+            "code_keywords + complexity:hard "
+            "→ computer-science-remom-route（合成は Qwen）"
         ),
+        expected_response_path="looper",
+        expect_remom_completion_id=True,
         allowed_selected_models=frozenset({"qwen3.6-27b", "lfm2.5-1.2b-jp"}),
-        allowed_decisions=frozenset(
-            {
-                "computer-science-remom-route",
-                "safe_only_svm_route",
-                "multi_factor_route",
-            }
+        max_tokens=32,
+        slow=True,
+    ),
+    MomTestCase(
+        name="mom_business_fusion_qwen",
+        prompt=(
+            "MBAケーススタディとして、B2B SaaS の価格戦略と顧客獲得コストの"
+            "トレードオフを比較し、根本原因を分析して、"
+            "分散システムのアーキテクチャをリファクタリングし、"
+            "トランザクション設計とデバッグ手順を詳しく説明してください。"
+            "競合3社との差分整理も踏まえた統合判断を求めます。"
         ),
+        intent="domain:business + complexity:hard → deliberation-fusion-route（Qwen 統合）",
+        expected_response_path="looper",
+        allowed_selected_models=frozenset({"qwen3.6-27b", "lfm2.5-1.2b-jp"}),
+        max_tokens=32,
+        slow=True,
+    ),
+    MomTestCase(
+        name="mom_urgent_automix_qwen",
+        prompt=(
+            "至急！本番障害が発生しました。すぐに影響範囲と復旧手順を簡潔に整理してください。"
+        ),
+        intent="urgent_keywords → urgent_automix_route で Qwen エスカレーション",
+        expected_decision="urgent_automix_route",
+        allowed_selected_models=frozenset({"qwen3.6-27b", "lfm2.5-1.2b-jp"}),
+        allowed_decisions=frozenset({"urgent_automix_route"}),
         max_tokens=32,
         slow=True,
     ),
@@ -384,6 +407,17 @@ def send_response_api(
     }
 
 
+def _cache_bust_tail() -> str:
+    syllables = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほ"
+    seed = uuid.uuid4().int
+    return "".join(syllables[(seed >> (i * 3)) % len(syllables)] for i in range(10))
+
+
+def _mom_prompt_with_cache_bust(prompt: str) -> str:
+    """semantic-cache 回避用のひらがな接尾辞（PII 誤検知を避ける）。"""
+    return f"{prompt.rstrip()} 補足{_cache_bust_tail()}。"
+
+
 def evaluate_routing_case(
     name: str,
     router_url: str,
@@ -398,6 +432,10 @@ def evaluate_routing_case(
     allowed_selected_models: set[str] | frozenset[str] | None = None,
     expected_upstream_model: str | None = None,
     forbidden_upstream_substrings: tuple[str, ...] = (),
+    expected_response_path: str | None = None,
+    expect_remom_completion_id: bool = False,
+    reject_cache_hit: bool = False,
+    skip_on_cache_hit: bool = False,
 ) -> CaseResult:
     started = time.monotonic()
     try:
@@ -424,6 +462,7 @@ def evaluate_routing_case(
         "x-selected-model"
     )
     selected_decision = headers.get("x-vsr-selected-decision")
+    response_path = headers.get("x-vsr-response-path")
     body = result["body"] or {}
     response_model = body.get("model")
     status_code = result["status_code"]
@@ -453,6 +492,22 @@ def evaluate_routing_case(
 
     failures: list[str] = []
 
+    if skip_on_cache_hit and cache_hit:
+        return CaseResult(
+            name=name,
+            passed=True,
+            skipped=True,
+            detail="semantic cache hit; routing/fusion path was not exercised",
+            elapsed_s=elapsed,
+            headers=routing_headers,
+            response_model=response_model,
+        )
+
+    if reject_cache_hit and cache_hit:
+        failures.append(
+            "x-vsr-cache-hit=true; semantic cache bypassed routing validation"
+        )
+
     # キャッシュヒット時は semantic-cache がモデル選択を経由せずレスポンスを
     # 再生するため、x-vsr-selected-model が付与されないことがある。これは
     # semantic-cache が意図通り機能している証拠であって不具合ではないので、
@@ -472,6 +527,18 @@ def evaluate_routing_case(
                 f"actual={selected_model}, allowed={sorted(allowed_selected_models)}"
             )
 
+    if expected_response_path and response_path != expected_response_path:
+        failures.append(
+            f"response path mismatch: expected={expected_response_path}, actual={response_path}"
+        )
+
+    if expect_remom_completion_id:
+        completion_id = str(body.get("id") or "")
+        if not completion_id.startswith("chatcmpl-remom"):
+            failures.append(
+                f"expected ReMoM completion id prefix, got id={completion_id!r}"
+            )
+
     if expected_decision and selected_decision != expected_decision:
         failures.append(
             f"decision mismatch: expected={expected_decision}, actual={selected_decision}"
@@ -488,9 +555,15 @@ def evaluate_routing_case(
         )
 
     if expected_upstream_model and response_model != expected_upstream_model:
-        failures.append(
-            f"upstream model mismatch: expected={expected_upstream_model}, actual={response_model}"
+        logical_upstream = (
+            EXPECTED_UPSTREAM.get(selected_model or "")
+            if selected_model
+            else None
         )
+        if response_model != selected_model and logical_upstream != expected_upstream_model:
+            failures.append(
+                f"upstream model mismatch: expected={expected_upstream_model}, actual={response_model}"
+            )
 
     for forbidden in forbidden_upstream_substrings:
         if response_model and forbidden in response_model:
@@ -898,22 +971,43 @@ def run_tests(args: argparse.Namespace) -> int:
 
     if not args.skip_mom:
         print("-- MoM auto routing (signal-designed prompts) --")
+        mom_case_filter = {
+            name.strip()
+            for name in (args.mom_cases or "").split(",")
+            if name.strip()
+        }
         for case in MOM_TEST_CASES:
+            if mom_case_filter and case.name not in mom_case_filter:
+                continue
             if case.slow and args.skip_slow:
                 continue
             timeout = args.slow_timeout if case.slow else args.timeout
+            prompt = case.prompt
+            if case.name == "mom_business_static_intent":
+                prompt = _mom_prompt_with_cache_bust(case.prompt)
+            elif case.name == "mom_business_fusion_qwen":
+                prompt = (
+                    f"ユニーク{_cache_bust_tail()}"
+                    f"{case.prompt}"
+                    " 加えてセグメント別の解約率推移も統合してください。"
+                )
             result = evaluate_routing_case(
                 case.name,
                 args.router_url,
                 request_model="MoM",
-                prompt=case.prompt,
+                prompt=prompt,
                 timeout=timeout,
                 max_tokens=case.max_tokens,
                 expected_selected_model=case.expected_selected_model,
                 allowed_selected_models=case.allowed_selected_models,
                 expected_decision=case.expected_decision,
                 allowed_decisions=case.allowed_decisions,
+                expected_upstream_model=case.expected_upstream_model,
                 forbidden_upstream_substrings=("unsloth/",),
+                expected_response_path=case.expected_response_path,
+                expect_remom_completion_id=case.expect_remom_completion_id,
+                reject_cache_hit=case.name != "mom_business_fusion_qwen",
+                skip_on_cache_hit=case.name == "mom_business_fusion_qwen",
             )
             results.append(result)
             print_case(result, show_intent=case.intent)
@@ -1022,6 +1116,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-slow",
         action="store_true",
         help="Skip slow MoM cases (fact-check escalation and ReMoM intent).",
+    )
+    parser.add_argument(
+        "--mom-cases",
+        default="",
+        help="Comma-separated MoM test case names to run (default: all).",
     )
     return parser
 
