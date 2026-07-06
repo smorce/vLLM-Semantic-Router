@@ -103,3 +103,31 @@ func writeRuntimeEmbeddingResponse(t *testing.T, w http.ResponseWriter, embeddin
 		t.Fatalf("encode response: %v", err)
 	}
 }
+
+func TestMultiModalEmbeddingTaskDependsOnUnifiedFactory(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				Qwen3ModelPath:      "models/mom-embedding-pro",
+				MmBertModelPath:     "models/mmbert-embed-32k-2d-matryoshka",
+				MultiModalModelPath: "models/mom-embedding-multimodal",
+			},
+		},
+	}
+	paths := resolveEmbeddingPaths(cfg)
+	tasks := buildEmbeddingRuntimeTasks(cfg, "test", paths, false, &embeddingStateTracker{})
+
+	var multimodalTask *Task
+	for i := range tasks {
+		if tasks[i].Name == "router.embedding.multimodal" {
+			multimodalTask = &tasks[i]
+			break
+		}
+	}
+	if multimodalTask == nil {
+		t.Fatal("expected router.embedding.multimodal task")
+	}
+	if len(multimodalTask.Dependencies) != 1 || multimodalTask.Dependencies[0] != "router.embedding.unified_factory" {
+		t.Fatalf("Dependencies = %#v, want [router.embedding.unified_factory]", multimodalTask.Dependencies)
+	}
+}

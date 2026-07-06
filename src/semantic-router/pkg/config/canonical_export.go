@@ -58,6 +58,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		Keywords:      append([]KeywordRule(nil), cfg.KeywordRules...),
 		Embeddings:    append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
 		Domains:       append([]Category(nil), cfg.Categories...),
+		Intents:       append([]IntentRule(nil), cfg.IntentRules...),
 		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
 		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
 		Reasks:        append([]ReaskRule(nil), cfg.ReaskRules...),
@@ -181,6 +182,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		System: CanonicalSystemModels{
 			PromptGuard:            cfg.PromptGuard.ModelID,
 			DomainClassifier:       cfg.CategoryModel.ModelID,
+			IntentClassifier:         cfg.IntentModel.ModelID,
 			PIIClassifier:          cfg.PIIModel.ModelID,
 			FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
 			HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
@@ -199,6 +201,10 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 				Domain: CanonicalCategoryModule{
 					CategoryModel: cfg.CategoryModel,
 					ModelRef:      "domain_classifier",
+				},
+				Intent: CanonicalCategoryModule{
+					CategoryModel: cfg.IntentModel,
+					ModelRef:      "intent_classifier",
 				},
 				MCP: cfg.MCPCategoryModel,
 				PII: CanonicalPIIModule{

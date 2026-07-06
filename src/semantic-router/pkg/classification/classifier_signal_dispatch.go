@@ -42,6 +42,10 @@ func (c *Classifier) buildSignalDispatchers(
 			func() { c.evaluateDomainSignal(results, mu, textForSignal(config.SignalTypeDomain)) },
 		},
 		{
+			config.SignalTypeIntent, "Intent",
+			func() { c.evaluateIntentSignal(results, mu, textForSignal(config.SignalTypeIntent)) },
+		},
+		{
 			config.SignalTypeFactCheck, "Fact-check",
 			func() { c.evaluateFactCheckSignal(results, mu, textForSignal(config.SignalTypeFactCheck)) },
 		},

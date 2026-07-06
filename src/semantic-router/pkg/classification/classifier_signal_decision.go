@@ -56,6 +56,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		KeywordRules:      signals.MatchedKeywordRules,
 		EmbeddingRules:    signals.MatchedEmbeddingRules,
 		DomainRules:       signals.MatchedDomainRules,
+		IntentRules:       signals.MatchedIntentRules,
 		FactCheckRules:    signals.MatchedFactCheckRules,
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
 		ReaskRules:        signals.MatchedReaskRules,

@@ -56,7 +56,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	classifier, err := classification.NewClassifier(classifierCfg, categoryMapping, piiMapping, nil)
+	classifier, err := classification.NewClassifier(classifierCfg, categoryMapping, nil, piiMapping, nil)
 	if err != nil {
 		return nil, err
 	}

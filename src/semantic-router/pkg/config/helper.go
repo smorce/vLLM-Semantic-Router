@@ -324,6 +324,11 @@ func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
 	return c.CategoryModel.ModelID != "" && c.CategoryMappingPath != ""
 }
 
+// IsIntentClassifierEnabled checks if function-call intent classification is enabled
+func (c *RouterConfig) IsIntentClassifierEnabled() bool {
+	return c.IntentModel.ModelID != "" && c.IntentModel.CategoryMappingPath != ""
+}
+
 // IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
 func (c *RouterConfig) IsMCPCategoryClassifierEnabled() bool {
 	return c.Enabled && c.ToolName != ""

@@ -21,6 +21,7 @@ import (
 
 type classifierMappings struct {
 	categoryMapping  *classification.CategoryMapping
+	intentMapping    *classification.CategoryMapping
 	piiMapping       *classification.PIIMapping
 	jailbreakMapping *classification.JailbreakMapping
 }

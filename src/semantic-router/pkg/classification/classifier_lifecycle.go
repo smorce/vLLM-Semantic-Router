@@ -15,6 +15,7 @@ import (
 func BuildClassifier(
 	cfg *config.RouterConfig,
 	categoryMapping *CategoryMapping,
+	intentMapping *CategoryMapping,
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
@@ -27,7 +28,7 @@ func BuildClassifier(
 		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
 		withPII(piiMapping, piiInitializer, piiInference),
 	})
-	options, err := builder.build(categoryMapping)
+	options, err := builder.build(categoryMapping, intentMapping)
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +40,11 @@ func BuildClassifier(
 func NewClassifier(
 	cfg *config.RouterConfig,
 	categoryMapping *CategoryMapping,
+	intentMapping *CategoryMapping,
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
-	classifier, err := BuildClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	classifier, err := BuildClassifier(cfg, categoryMapping, intentMapping, piiMapping, jailbreakMapping)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +102,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	}
 
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
+	appendTask("classifier.intent", false, c.usesRoutingSignalType(config.SignalTypeIntent) && c.IsIntentEnabled(), c.initializeIntentClassifier)
 	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)

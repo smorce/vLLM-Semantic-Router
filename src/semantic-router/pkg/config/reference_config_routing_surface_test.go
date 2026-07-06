@@ -7,6 +7,7 @@ var referenceSignalKeyByType = map[string]string{
 	SignalTypeComplexity:   "complexity",
 	SignalTypeContext:      "context",
 	SignalTypeDomain:       "domains",
+	SignalTypeIntent:       "intents",
 	SignalTypeEmbedding:    "embeddings",
 	SignalTypeFactCheck:    "fact_check",
 	SignalTypeJailbreak:    "jailbreak",

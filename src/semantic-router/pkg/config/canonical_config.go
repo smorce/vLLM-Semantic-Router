@@ -31,6 +31,7 @@ type CanonicalSignals struct {
 	Keywords      []KeywordRule      `yaml:"keywords,omitempty"`
 	Embeddings    []EmbeddingRule    `yaml:"embeddings,omitempty"`
 	Domains       []Category         `yaml:"domains,omitempty"`
+	Intents       []IntentRule       `yaml:"intents,omitempty"`
 	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
 	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
 	Reasks        []ReaskRule        `yaml:"reasks,omitempty"`
@@ -273,6 +274,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		KeywordRules:      append([]KeywordRule(nil), signals.Keywords...),
 		EmbeddingRules:    append([]EmbeddingRule(nil), signals.Embeddings...),
 		Categories:        append([]Category(nil), signals.Domains...),
+		IntentRules:       append([]IntentRule(nil), signals.Intents...),
 		FactCheckRules:    append([]FactCheckRule(nil), signals.FactCheck...),
 		UserFeedbackRules: append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
 		ReaskRules:        append([]ReaskRule(nil), signals.Reasks...),

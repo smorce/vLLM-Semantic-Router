@@ -62,7 +62,37 @@ def detect_canonical_storage_backends(
     if vs_metadata == "postgres":
         backends.add("postgres")
 
+    if _ratelimit_requires_redis(config):
+        backends.add("redis")
+
     return backends
+
+
+def _ratelimit_requires_redis(config: Mapping[str, Any]) -> bool:
+    """ratelimit が redis プロバイダを使う場合はローカル serve 用 Redis を起動する。"""
+    global_config = config.get("global")
+    if not isinstance(global_config, Mapping):
+        return False
+
+    services = global_config.get("services")
+    if not isinstance(services, Mapping):
+        return False
+
+    ratelimit = services.get("ratelimit")
+    if not isinstance(ratelimit, Mapping):
+        return False
+    if ratelimit.get("enabled") is False:
+        return False
+
+    providers = ratelimit.get("providers")
+    if not isinstance(providers, list):
+        return False
+
+    return any(
+        isinstance(provider, Mapping)
+        and str(provider.get("type", "")).strip().lower() == "redis"
+        for provider in providers
+    )
 
 
 def _semantic_cache_requires_managed_milvus(

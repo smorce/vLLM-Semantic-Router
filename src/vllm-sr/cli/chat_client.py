@@ -15,6 +15,8 @@ from cli.utils import load_config
 
 DEFAULT_CHAT_MODEL = "MoM"
 CHAT_COMPLETIONS_PATH = "/v1/chat/completions"
+DEFAULT_LOCAL_USER_ID = "demo-user"
+DEFAULT_LOCAL_USER_GROUPS = "premium-tier"
 
 
 def normalize_base_url(url: str) -> str:
@@ -119,11 +121,37 @@ def extract_assistant_text(data: dict[str, Any]) -> str:
     return str(content)
 
 
+def build_local_auth_headers(config_path: str) -> dict[str, str]:
+    """Inject local dev identity headers when role_bindings require authz evaluation."""
+    path = Path(config_path)
+    if not path.is_file():
+        return {}
+    user_config = load_config(str(path)) or {}
+    routing = user_config.get("routing") or {}
+    signals = routing.get("signals") or {}
+    role_bindings = signals.get("role_bindings") or []
+    if not role_bindings:
+        return {}
+
+    services = user_config.get("services") or {}
+    authz = services.get("authz") or {}
+    identity = authz.get("identity") or {}
+    user_header = str(identity.get("user_id_header") or "x-user-id")
+    groups_header = str(identity.get("user_groups_header") or "x-user-groups")
+    return {
+        user_header: DEFAULT_LOCAL_USER_ID,
+        groups_header: DEFAULT_LOCAL_USER_GROUPS,
+    }
+
+
 def post_chat_completions(
     *,
     url: str,
     payload: dict[str, Any],
     timeout: float,
+    extra_headers: dict[str, str] | None = None,
 ) -> requests.Response:
     headers = {"Content-Type": "application/json"}
+    if extra_headers:
+        headers.update(extra_headers)
     return requests.post(url, headers=headers, json=payload, timeout=timeout)

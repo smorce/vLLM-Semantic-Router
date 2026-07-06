@@ -14,10 +14,12 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeKeyword:      c.keywordClassifier != nil,
 		config.SignalTypeEmbedding:    c.keywordEmbeddingClassifier != nil,
 		config.SignalTypeDomain:       c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
+		config.SignalTypeIntent:       c.IsIntentEnabled() && c.intentInference != nil && c.IntentMapping != nil,
 		config.SignalTypeFactCheck:    len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled(),
 		config.SignalTypeUserFeedback: len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled(),
 		config.SignalTypeReask:        c.reaskClassifier != nil,
-		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
+		config.SignalTypePreference: len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled() &&
+			c.preferenceClassifier != nil && c.preferenceClassifier.IsInitialized(),
 		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:      c.contextClassifier != nil,
 		config.SignalTypeStructure:    c.structureClassifier != nil,

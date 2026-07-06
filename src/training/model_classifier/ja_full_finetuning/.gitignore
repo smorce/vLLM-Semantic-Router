@@ -1,0 +1,18 @@
+# ダウンロード・キャッシュされたデータセット
+jmmlu_dataset.zip
+presidio_synth_dataset_v2.json
+*.jsonl
+*.parquet
+
+# 学習済みモデル出力
+ja_full_*/
+checkpoint-*/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+*.pyo
+
+# ログ
+*.log
+logs/

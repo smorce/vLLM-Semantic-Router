@@ -93,6 +93,7 @@ type CanonicalModelModules struct {
 type CanonicalSystemModels struct {
 	PromptGuard            string `yaml:"prompt_guard,omitempty"`
 	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
+	IntentClassifier       string `yaml:"intent_classifier,omitempty"`
 	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
 	FactCheckClassifier    string `yaml:"fact_check_classifier,omitempty"`
 	HallucinationDetector  string `yaml:"hallucination_detector,omitempty"`
@@ -110,6 +111,7 @@ type CanonicalPromptGuardModule struct {
 // CanonicalClassifierModule exposes classifier submodules explicitly.
 type CanonicalClassifierModule struct {
 	Domain     CanonicalCategoryModule `yaml:"domain"`
+	Intent     CanonicalCategoryModule `yaml:"intent"`
 	MCP        MCPCategoryModel        `yaml:"mcp"`
 	PII        CanonicalPIIModule      `yaml:"pii"`
 	Preference PreferenceModelConfig   `yaml:"preference"`
@@ -158,6 +160,7 @@ type CanonicalFeedbackDetectorModule struct {
 func (m CanonicalClassifierModule) runtimeConfig() Classifier {
 	return Classifier{
 		CategoryModel:    m.Domain.CategoryModel,
+		IntentModel:      m.Intent.CategoryModel,
 		MCPCategoryModel: m.MCP,
 		PIIModel:         m.PII.PIIModel,
 		PreferenceModel:  m.Preference.WithDefaults(),
@@ -270,6 +273,13 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	); err != nil {
 		return fmt.Errorf("global.model_catalog.modules.classifier.domain: %w", err)
 	}
+	if global.ModelCatalog.Modules.Classifier.Intent.ModelID, err = resolveSystemModelRef(
+		global.ModelCatalog.Modules.Classifier.Intent.ModelRef,
+		global.ModelCatalog.Modules.Classifier.Intent.ModelID,
+		global.ModelCatalog.System,
+	); err != nil {
+		return fmt.Errorf("global.model_catalog.modules.classifier.intent: %w", err)
+	}
 	if global.ModelCatalog.Modules.Classifier.PII.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.Classifier.PII.ModelRef,
 		global.ModelCatalog.Modules.Classifier.PII.ModelID,
@@ -322,6 +332,8 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		modelID = catalog.PromptGuard
 	case "domain_classifier":
 		modelID = catalog.DomainClassifier
+	case "intent_classifier":
+		modelID = catalog.IntentClassifier
 	case "pii_classifier":
 		modelID = catalog.PIIClassifier
 	case "fact_check_classifier":

@@ -62,6 +62,7 @@ type SignalMatches struct {
 	KeywordRules      []string
 	EmbeddingRules    []string
 	DomainRules       []string
+	IntentRules       []string
 	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	ReaskRules        []string // History-aware dissatisfaction signals from repeated user turns
@@ -205,6 +206,9 @@ func (e *DecisionEngine) matchesSignalType(
 ) (matched bool, supported bool) {
 	if normalizedType == "domain" {
 		return e.matchesDomainCondition(name, signals.DomainRules), true
+	}
+	if normalizedType == "intent" {
+		return slices.Contains(signals.IntentRules, name), true
 	}
 
 	ruleSets := map[string][]string{

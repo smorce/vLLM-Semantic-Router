@@ -63,6 +63,43 @@ def test_resolve_listener_host_port_with_offset(
     assert port == 8899 + 10
 
 
+def test_build_local_auth_headers(tmp_path: Path):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "routing": {
+                    "signals": {
+                        "role_bindings": [{"name": "admin", "role": "admin"}],
+                    }
+                },
+                "services": {
+                    "authz": {
+                        "identity": {
+                            "user_id_header": "x-user-id",
+                            "user_groups_header": "x-user-groups",
+                        }
+                    }
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    headers = chat_client.build_local_auth_headers(str(cfg))
+    assert headers == {
+        "x-user-id": "demo-user",
+        "x-user-groups": "premium-tier",
+    }
+
+
+def test_build_local_auth_headers_skips_without_role_bindings(tmp_path: Path):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("routing:\n  signals: {}\n", encoding="utf-8")
+    assert chat_client.build_local_auth_headers(str(cfg)) == {}
+
+
 def test_build_chat_payload_and_extract():
     payload = chat_client.build_chat_payload(
         model="MoM",

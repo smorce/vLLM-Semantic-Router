@@ -391,6 +391,8 @@ def get_model_mapping() -> Dict[str, str]:
         "deberta-v3-base": "microsoft/deberta-v3-base",
         "deberta-v3-large": "microsoft/deberta-v3-large",
         "distilbert-base-uncased": "distilbert-base-uncased",
+        # ModernBERT-Ja ベースの日本語埋め込みモデル（フルファインチューニング向け、8K コンテキスト）
+        "ruri-v3-30m": "cl-nagoya/ruri-v3-30m",
     }
 
 
@@ -416,6 +418,8 @@ def get_max_length_for_model(model_name: str) -> int:
         return 8192
     elif model_name in ["modernbert-base", "answerdotai/ModernBERT-base"]:
         return 8192  # ModernBERT also supports long context
+    elif model_name in ["ruri-v3-30m", "cl-nagoya/ruri-v3-30m"]:
+        return 8192  # ModernBERT-Ja ベース、8K コンテキスト対応
     else:
         return 512
 

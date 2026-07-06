@@ -18,6 +18,10 @@ func NewLegacyClassifierFromConfig(cfg *config.RouterConfig) (*Classifier, error
 	if err != nil {
 		return nil, err
 	}
+	intentMapping, err := loadLegacyIntentMapping(cfg)
+	if err != nil {
+		return nil, err
+	}
 	piiMapping, err := loadLegacyPIIMapping(cfg)
 	if err != nil {
 		return nil, err
@@ -27,7 +31,7 @@ func NewLegacyClassifierFromConfig(cfg *config.RouterConfig) (*Classifier, error
 		return nil, err
 	}
 
-	classifier, err := NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	classifier, err := NewClassifier(cfg, categoryMapping, intentMapping, piiMapping, jailbreakMapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
@@ -49,6 +53,18 @@ func loadLegacyCategoryMapping(cfg *config.RouterConfig) (*CategoryMapping, erro
 		return nil, fmt.Errorf("failed to load category mapping: %w", err)
 	}
 	return categoryMapping, nil
+}
+
+func loadLegacyIntentMapping(cfg *config.RouterConfig) (*CategoryMapping, error) {
+	if !cfg.NeedsIntentMappingForRouting() {
+		return nil, nil
+	}
+
+	intentMapping, err := LoadCategoryMapping(cfg.IntentModel.CategoryMappingPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load intent mapping: %w", err)
+	}
+	return intentMapping, nil
 }
 
 func loadLegacyPIIMapping(cfg *config.RouterConfig) (*PIIMapping, error) {

@@ -14,6 +14,7 @@ type SignalResults struct {
 	MatchedKeywords          []string // The actual keywords that matched (not rule names)
 	MatchedEmbeddingRules    []string
 	MatchedDomainRules       []string
+	MatchedIntentRules       []string
 	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedReaskRules        []string // History-aware repeated-question dissatisfaction signals
@@ -57,6 +58,7 @@ type SignalMetricsCollection struct {
 	Keyword      SignalMetrics `json:"keyword"`
 	Embedding    SignalMetrics `json:"embedding"`
 	Domain       SignalMetrics `json:"domain"`
+	Intent       SignalMetrics `json:"intent"`
 	FactCheck    SignalMetrics `json:"fact_check"`
 	UserFeedback SignalMetrics `json:"user_feedback"`
 	Reask        SignalMetrics `json:"reask"`

@@ -29,7 +29,7 @@ func buildNativeTestBlockRunner(prog *dsl.Program) (dsl.TestBlockRunner, error) 
 		return nil, err
 	}
 
-	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, nil, piiMapping, jailbreakMapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create classifier for TEST blocks: %w", err)
 	}

@@ -32,6 +32,14 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
+			return cfg.NeedsIntentMappingForRouting()
+		},
+		paths: func(cfg *config.RouterConfig) []string {
+			return []string{cfg.IntentModel.ModelID}
+		},
+	},
+	{
+		enabled: func(cfg *config.RouterConfig) bool {
 			return cfg.NeedsPIIMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {

@@ -13,6 +13,11 @@ import (
 )
 
 func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.Mutex, text string) {
+	if c.preferenceClassifier == nil || !c.preferenceClassifier.IsInitialized() {
+		logging.Debugf("preference classifier not initialized, skipping preference signal evaluation")
+		return
+	}
+
 	start := time.Now()
 	contentBytes, _ := json.Marshal(text)
 	conversationJSON := fmt.Sprintf(`[{"role":"user","content":%s}]`, contentBytes)

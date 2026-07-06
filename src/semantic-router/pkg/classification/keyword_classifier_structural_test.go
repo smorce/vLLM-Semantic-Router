@@ -239,3 +239,28 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 		})
 	}
 }
+
+func TestNewKeywordClassifierAcceptsFuzzyMethod(t *testing.T) {
+	classifier, err := NewKeywordClassifier([]config.KeywordRule{{
+		Name:           "fuzzy_sensitive_keywords",
+		Operator:       "OR",
+		Method:         "fuzzy",
+		Keywords:       []string{"password", "secret"},
+		FuzzyMatch:     true,
+		FuzzyThreshold: 2,
+	}})
+	if err != nil {
+		t.Fatalf("NewKeywordClassifier() error = %v", err)
+	}
+
+	category, keywords, err := classifier.ClassifyWithKeywords("my pasword leaked")
+	if err != nil {
+		t.Fatalf("ClassifyWithKeywords() error = %v", err)
+	}
+	if category != "fuzzy_sensitive_keywords" {
+		t.Fatalf("category = %q, want fuzzy_sensitive_keywords", category)
+	}
+	if len(keywords) != 1 || keywords[0] != "password (fuzzy)" {
+		t.Fatalf("keywords = %#v, want password fuzzy match", keywords)
+	}
+}

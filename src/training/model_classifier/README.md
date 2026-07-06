@@ -7,8 +7,14 @@ This directory contains **LoRA (Low-Rank Adaptation)** training scripts for fine
 ### Classification Tasks
 
 - **Intent Classification** (`classifier_model_fine_tuning_lora/`)
+  - LoRA: `ft_linear_lora.py` (parameter-efficient, default)
+  - Full fine-tuning: `ft_linear_full.py` (all parameters, no `peft`) — see [classifier README](classifier_model_fine_tuning_lora/README.md)
 - **PII Detection** (`pii_model_fine_tuning_lora/`)  
 - **Security Detection** (`prompt_guard_fine_tuning_lora/`)
+- **Japanese Full Fine-Tuning (4 scripts)** (`ja_full_finetuning/`) — PII / jailbreak / function-call
+  intent classifiers (production, `cl-nagoya/ruri-v3-30m` / ModernBERT-Ja full fine-tuning, no
+  `peft`) plus an academic-domain classifier script kept for reuse in other projects (not wired
+  into this repo's `config.yaml`) — see [ja_full_finetuning README](ja_full_finetuning/README.md)
 
 ### Problem Solving Tasks
 
@@ -72,10 +78,12 @@ src/training/training_lora/
 ├── common_lora_utils.py               # Shared utilities
 │
 ├── classifier_model_fine_tuning_lora/ # Intent Classification
-│   ├── ft_linear_lora.py             # Training script
+│   ├── README.md                     # LoRA vs full FT guide (Japanese)
+│   ├── ft_linear_lora.py             # LoRA training script
+│   ├── ft_linear_full.py             # Full fine-tuning script (no peft)
 │   ├── ft_qwen3_generative_lora.py   # Category classifier
 │   ├── ft_linear_lora_verifier.go    # Go verification
-│   ├── train_cpu_optimized.sh        # Training automation
+│   ├── train_cpu_optimized.sh        # LoRA training automation
 │   └── go.mod
 │
 ├── pii_model_fine_tuning_lora/        # PII Detection
@@ -91,9 +99,19 @@ src/training/training_lora/
 │   ├── train_cpu_optimized.sh        # Training automation
 │   └── go.mod
 │
-└── mmlu_pro_solver_lora/              # ⭐ MMLU-Pro Problem Solvers
-    ├── ft_qwen3_mmlu_solver_lora[_no_leakage].py  # Main training script, _no_leakage version has no MMLU-Pro data leakage
-    └── train_all_specialists[_no_leakage].sh       # Batch training, _no_leakage version has no MMLU-Pro data leakage
+├── mmlu_pro_solver_lora/              # ⭐ MMLU-Pro Problem Solvers
+│   ├── ft_qwen3_mmlu_solver_lora[_no_leakage].py  # Main training script, _no_leakage version has no MMLU-Pro data leakage
+│   └── train_all_specialists[_no_leakage].sh       # Batch training, _no_leakage version has no MMLU-Pro data leakage
+│
+└── ja_full_finetuning/                 # 🇯🇵 Japanese Full Fine-Tuning (PII/jailbreak/intent, +unused domain)
+    ├── README.md                      # Task details, config.yaml reflection steps (Japanese)
+    ├── TRAINING_GUIDE.md              # Reusable GPU training/inference guide (Japanese)
+    ├── ja_domain_classifier_full.py   # Academic domain classification (JMMLU) — not used in this repo's config.yaml
+    ├── ja_pii_full.py                 # PII detection (akiFQC, token classification)
+    ├── ja_jailbreak_full.py           # Jailbreak detection (APTO + oasst1-ja)
+    ├── ja_intent_classifier_full.py   # Function-call intent classification (glaive-ja, 8 categories) — used as domain_classifier
+    ├── verify_domain/ verify_pii/ verify_jailbreak/ verify_intent/  # Go verifiers (one per task)
+    └── go.mod
 ```
 
 ## 🚀 Quick Start
@@ -258,9 +276,20 @@ training_args = TrainingArguments(
 ### Intent Classification
 
 - **Task Type**: Sequence Classification
-- **Classes**: `business`, `law`, `psychology`
-- **Dataset**: Synthetic business/legal/psychology queries
-- **Metric**: Accuracy, Confidence
+- **Classes**: 14 MMLU-Pro categories (`business`, `law`, `psychology`, `math`, etc.)
+- **Dataset**: [TIGER-Lab/MMLU-Pro](https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro) + supplement data
+- **Metric**: Accuracy, F1
+- **Scripts**:
+  - `ft_linear_lora.py` — LoRA (PEFT), ~0.02% trainable params, lower memory
+  - `ft_linear_full.py` — full fine-tuning, all params, complete model output
+- **Detailed comparison**: [classifier_model_fine_tuning_lora/README.md](classifier_model_fine_tuning_lora/README.md)
+
+```bash
+# Full fine-tuning (example)
+cd classifier_model_fine_tuning_lora/
+python ft_linear_full.py --mode train --model modernbert-base --epochs 3 --max-samples 5000
+python ft_linear_full.py --mode test --model-path full_intent_classifier_modernbert-base
+```
 
 ### PII Detection  
 

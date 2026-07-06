@@ -648,7 +648,7 @@ func multiModalEmbeddingRuntimeTask(
 		return nil
 	}
 
-	return []Task{{
+	task := Task{
 		Name:       "router.embedding.multimodal",
 		BestEffort: true,
 		Run: func(context.Context) error {
@@ -662,5 +662,11 @@ func multiModalEmbeddingRuntimeTask(
 			}
 			return nil
 		},
-	}}
+	}
+	// Multimodal init creates GLOBAL_MODEL_FACTORY when it wins the race. Unified
+	// embedding init must register qwen3/gemma/mmbert first or mmBERT stays unavailable.
+	if paths.hasUnifiedModels() {
+		task.Dependencies = []string{"router.embedding.unified_factory"}
+	}
+	return []Task{task}
 }

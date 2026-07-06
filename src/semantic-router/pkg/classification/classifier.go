@@ -11,6 +11,8 @@ type Classifier struct {
 	// Dependencies - In-tree classifiers
 	categoryInitializer         CategoryInitializer
 	categoryInference           CategoryInference
+	intentInitializer           IntentInitializer
+	intentInference             IntentInference
 	jailbreakInitializer        JailbreakInitializer
 	jailbreakInference          JailbreakInference
 	piiInitializer              PIIInitializer
@@ -68,6 +70,7 @@ type Classifier struct {
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
+	IntentMapping    *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
 

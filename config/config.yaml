@@ -29,16 +29,19 @@ providers:
         completion_per_1m: 0.42
       external_model_ids:
         openai: LiquidAI/LFM2.5-1.2B-JP
+        vllm: LiquidAI/LFM2.5-1.2B-JP
+        chat: LiquidAI/LFM2.5-1.2B-JP
         analytics: lfm2.5-routing
       backend_refs:
         - name: vllm_fast
           endpoint: 172.17.0.1:3849
           protocol: http
           weight: 100
-          type: chat
+          type: vllm
+          api_key: sk-local-no-key-required
     - name: qwen3.6-27b
       reasoning_family: qwen3
-      provider_model_id: unsloth/Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
+      provider_model_id: Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
       api_format: openai
       pricing:
         currency: USD
@@ -46,14 +49,17 @@ providers:
         cached_input_per_1m: 0.3
         completion_per_1m: 3.4
       external_model_ids:
-        openai: unsloth/Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
+        openai: Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
+        vllm: Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
+        chat: Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
+        llama: Qwen3.6-27B-MTP-GGUF-UD-Q4_K_XL
         internal: qwen3.6-27b
       backend_refs:
         - name: llama_server_heavy
           endpoint: 172.17.0.1:1067
           protocol: http
           weight: 100
-          type: chat
+          type: llama
           api_key: sk-local-no-key-required
     - name: llava-omni
       provider_model_id: llava-omni-preview
@@ -137,6 +143,25 @@ routing:
         keywords: ["機械学習", "モデル学習", "勾配", "ニューラルネットワーク", "分類器"]
         case_sensitive: false
         bm25_threshold: 0.1
+      # domain 分類器 (MMLU BERT) のブレを補うためのキーワード signal。
+      # domain:business / fact_check と OR することで、分類器が外しても
+      # decision がフォールバック (safe_only_svm_route) に落ちにくくする。
+      # 注意: keyword signal は「config 宣言順で最初にマッチしたルール」を返す
+      # first-match 方式で、bm25 method のルール同士は1回の内部分類で単一勝者を
+      # 決める。fuzzy/regex ルール (下の fuzzy_sensitive_keywords 等) より前に
+      # 宣言しないと、その勝者が返される前に無関係な fuzzy マッチに奪われる。
+      - name: business_keywords
+        operator: OR
+        method: bm25
+        keywords: ["経営", "ビジネス", "MBA", "B2B", "SaaS", "価格戦略", "顧客獲得コスト", "マーケティング戦略", "事業戦略"]
+        case_sensitive: false
+        bm25_threshold: 0.1
+      - name: legal_fact_keywords
+        operator: OR
+        method: bm25
+        keywords: ["憲法", "法律", "施行", "条例", "判例", "何年何月何日", "正確に答えて", "事実確認"]
+        case_sensitive: false
+        bm25_threshold: 0.1
       - name: urgent_keywords
         operator: OR
         method: ngram
@@ -208,6 +233,24 @@ routing:
       - name: other
         description: 一般的なフォールバック対象のリクエスト。
         mmlu_categories: [other]
+
+    intents:
+      - name: information_retrieval
+        description: 検索・照会・情報取得系の関数呼び出し意図。
+      - name: calculation
+        description: 計算・数値変換系の関数呼び出し意図。
+      - name: scheduling
+        description: カレンダー・リマインダー・予約系の関数呼び出し意図。
+      - name: communication
+        description: メール・通知・SNS投稿系の関数呼び出し意図。
+      - name: file_operations
+        description: ノート・ファイル・アカウント/連絡先のCRUD系の関数呼び出し意図。
+      - name: data_transformation
+        description: 暗号化・翻訳・生成（QR/パスワード等）系の関数呼び出し意図。
+      - name: analysis
+        description: 感情分析・文章分析・レビュー分析系の関数呼び出し意図。
+      - name: no_function_needed
+        description: 関数呼び出しが不要な一般会話。
 
     fact_check:
       - name: needs_fact_check
@@ -331,29 +374,38 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
+        # 0.75 は margin (hard_score - easy_score) の閾値で非常に厳しく、
+        # 実測で複雑なリファクタリング依頼でも margin は 0.1-0.2 程度にしか
+        # ならなかった。candidates を実際のプロンプト分布に近づけて margin を
+        # 0.36 まで押し上げた上で、実測分布 (簡単な依頼は -0.15〜0.19、CS の
+        # 複雑な依頼は 0.36) を踏まえ、閾値をその中間の 0.3 に調整する。
+        threshold: 0.3
         description: 多段推論や統合的な整理が必要なプロンプトをエスカレーションする。
         hard:
           candidates:
             - 手順を追って解いて
             - 複数のトレードオフを比較して
             - 根本原因を分析して
-          image_candidates:
             - 詳細なアーキテクチャ図を生成して
+            - 分散システムのアーキテクチャをリファクタリングし、トランザクション設計とデバッグ手順を詳しく説明して
+            - 複雑なアルゴリズムの設計上の注意点を段階的に整理して
         easy:
           candidates:
             - 短く答えて
             - 簡単に要約して
             - シンプルに書き直して
-          image_candidates:
             - シンプルなアイコンを作って
         composer:
+          # code_keywords も許可: domain:computer science が未検出でも、
+          # CS/実装系のキーワードが強ければ needs_reasoning:hard を残す。
           operator: OR
           conditions:
             - type: context
               name: long_context
             - type: domain
               name: "computer science"
+            - type: keyword
+              name: code_keywords
 
     modality:
       - name: AR
@@ -397,7 +449,8 @@ routing:
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS
-        description: 低リスクな識別子のみ通過を許可する機微プロンプト。
+          - COMPANY_NAME
+        description: 氏名・住所・電話など高リスク PII のみルーティング対象とする。
 
     kb:
       - name: privacy_policy
@@ -543,13 +596,17 @@ routing:
     - name: static_business_route
       description: 標準的なビジネス系リクエスト向けの静的フォールバックルート。
       priority: 200
-      tier: 2
+      # tier は意図的に未設定。tier>0 を付けると decision 選択が priority より
+      # tier 昇順を優先するため、tier 未設定 (0扱い) の safe_only_svm_route に
+      # 常に負けてしまう (decision/engine.go の useTieredSelection を参照)。
       output_contract: Preserve any explicit user-requested output format exactly.
       rules:
-        operator: AND
+        operator: OR
         conditions:
           - type: domain
             name: business
+          - type: keyword
+            name: business_keywords
       modelRefs:
         - model: lfm2.5-1.2b-jp
           use_reasoning: false
@@ -580,6 +637,13 @@ routing:
             enabled: true
             similarity_threshold: 0.82
             ttl_seconds: 7200
+        # global.stores.memory.enabled: true だと、decision に memory plugin が
+        # 無いだけで decisionWillPersonalize() が true になり、cache の
+        # 読み書きが丸ごとスキップされる (extproc/req_filter_cache.go)。
+        # このルートは個人化しない静的フォールバックなので明示的に無効化する。
+        - type: memory
+          configuration:
+            enabled: false
         - type: tools
           configuration:
             enabled: true
@@ -621,6 +685,8 @@ routing:
             name: law
           - type: fact_check
             name: needs_fact_check
+          - type: keyword
+            name: legal_fact_keywords
       modelRefs:
         - model: lfm2.5-1.2b-jp
           use_reasoning: true
@@ -718,12 +784,22 @@ routing:
         postprocess:
           - type: dereference_selected_reference
       rules:
-        operator: AND
+        # domain 分類器が "computer science" を外しても、code_keywords が
+        # 強くマッチしていれば ReMoM ルートに乗せられるように OR で二重化する。
+        operator: OR
         conditions:
-          - type: domain
-            name: "computer science"
-          - type: complexity
-            name: needs_reasoning:hard
+          - operator: AND
+            conditions:
+              - type: domain
+                name: "computer science"
+              - type: complexity
+                name: needs_reasoning:hard
+          - operator: AND
+            conditions:
+              - type: keyword
+                name: code_keywords
+              - type: complexity
+                name: needs_reasoning:hard
       modelRefs:
         - model: qwen3.6-27b
           use_reasoning: true
@@ -1056,7 +1132,7 @@ routing:
             top_k: 6
             max_context_length: 8000
             injection_mode: system_prompt
-            on_failure: block
+            on_failure: skip
             cache_results: false
             min_confidence_threshold: 0.5
             backend_config:
@@ -1204,6 +1280,46 @@ routing:
               vector_store_id: local-vs
               file_ids: [kb-001, kb-002]
 
+    - name: intent_calculation_route
+      description: 計算・数値変換系の関数呼び出し意図向けルート。
+      priority: 115
+      rules:
+        operator: AND
+        conditions:
+          - type: intent
+            name: calculation
+      modelRefs:
+        - model: lfm2.5-1.2b-jp
+          use_reasoning: false
+      algorithm:
+        type: static
+      plugins:
+        - type: header_mutation
+          configuration:
+            add:
+              - name: x-intent-route
+                value: calculation
+
+    - name: restricted_pii_guard_route
+      description: 許可されていない PII を含むリクエスト向けのガードルート。
+      priority: 205
+      rules:
+        operator: AND
+        conditions:
+          - type: pii
+            name: restricted_pii
+      modelRefs:
+        - model: lfm2.5-1.2b-jp
+          use_reasoning: false
+      algorithm:
+        type: static
+      plugins:
+        - type: header_mutation
+          configuration:
+            add:
+              - name: x-pii-guard
+                value: restricted
+
     - name: repeat_question_escalation
       description: 不満足な回答後に同じ質問が繰り返された場合にエスカレーションする。
       priority: 114
@@ -1226,7 +1342,10 @@ routing:
 
     - name: safe_only_svm_route
       description: prompt-injection シグナルがない場合だけマッチする SVM ルート。
-      priority: 110
+      # 他の全 decision より低い priority にして、真の「最終フォールバック」に
+      # する。NOT jailbreak はほぼ常に true になるため、priority を高くすると
+      # 意図別ルート (business/ML/CS 等) より先にマッチしてしまう。
+      priority: 90
       rules:
         operator: NOT
         conditions:
@@ -1348,13 +1467,13 @@ global:
   router:
     config_source: file
     strategy: priority
-    auto_model_name: exhaustive-reference
+    auto_model_name: MoM
     auto_model_names:
       - vllm-sr/auto
       - auto
-      - exhaustive-reference
+      - MoM
     include_config_models_in_list: true
-    clear_route_cache: false
+    clear_route_cache: true
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -1449,7 +1568,7 @@ global:
           high_resolution_timing: true
     response_api:
       enabled: true
-      store_backend: memory
+      store_backend: redis
       ttl_seconds: 86400
       max_responses: 2000
       redis:
@@ -1469,7 +1588,6 @@ global:
         tls_cert_path: certs/redis.crt
         tls_key_path: certs/redis.key
         tls_ca_path: certs/ca.crt
-        config_path: config/backends/response-api-redis.yaml
     observability:
       tracing:
         enabled: true
@@ -1495,20 +1613,21 @@ global:
           queue_depth_estimation: true
           max_models: 50
     authz:
-      fail_open: false
+      fail_open: true
       identity:
         user_id_header: x-user-id
         user_groups_header: x-user-groups
       providers:
-        - type: header
+        - type: header-injection
           headers:
             X-Plan: premium
             X-Role: admin
+        - type: static-config
     ratelimit:
       fail_open: false
       providers:
         - type: redis
-          address: redis:6379
+          address: vllm-sr-redis:6379
           domain: api
           rules:
             - name: premium-per-minute
@@ -1525,7 +1644,11 @@ global:
               tokens_per_unit: 2000000
               unit: hour
     startup_status:
-      store_backend: file
+      store_backend: redis
+      redis:
+        address: redis:6379
+        password: redis-secret
+        db: 3
     router_replay:
       enabled: true
       store_backend: postgres
@@ -1541,7 +1664,7 @@ global:
         pool_size: 20
         key_prefix: "vsr:replay:"
       postgres:
-        host: postgres
+        host: vllm-sr-postgres
         port: 5432
         database: vsr
         user: router
@@ -1609,7 +1732,7 @@ global:
           enable_metrics: true
       milvus:
         connection:
-          host: milvus
+          host: vllm-sr-milvus
           port: 19530
           database: default
           timeout: 30
@@ -1725,7 +1848,7 @@ global:
         tls_ca_path: ""
         tls_insecure_skip_verify: false
       milvus:
-        address: milvus:19530
+        address: vllm-sr-milvus:19530
         collection: agentic_memory
         dimension: 384
         num_partitions: 32
@@ -1899,7 +2022,12 @@ global:
           weight_decision_prior: 1
           repetition_penalty_strength: 0
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
+      # confidence/remom/fusion/workflows はここへ自己ループでチャット補完を
+      # 投げ直す。この deployment は vllm-sr serve の split topology
+      # (router container と envoy container が別プロセス) なので、
+      # localhost:8899 (単一コンテナ/デフォルト値) ではなく、実際の listener
+      # (http-8801) を持つ envoy コンテナのサービス名で到達する必要がある。
+      endpoint: http://vllm-sr-envoy-container:8801/v1/chat/completions
       grpc_max_msg_size_mb: 16
       timeout_seconds: 120
       retry_count: 2
@@ -1915,14 +2043,14 @@ global:
         model_names:
           - vllm-sr/flow
         state:
-          store_backend: file
+          store_backend: redis
           ttl_seconds: 1800
           file:
             directory: .vllm-sr/flow-state
           redis:
-            address: localhost:6379
-            db: 0
-            password: ""
+            address: redis:6379
+            db: 4
+            password: redis-secret
             use_tls: false
             tls_skip_verify: false
             max_retries: 3
@@ -1962,9 +2090,12 @@ global:
           max_retries: 2
           dimensions: 1024
     system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
+      # 日本語版フルファインチューニングモデル（cl-nagoya/ruri-v3-30m ベース）。
+      # 学習方法: src/training/model_classifier/ja_full_finetuning/README.md を参照。
+      prompt_guard: models/ja-full-jailbreak-detector-ruri-v3-30m
+      domain_classifier: models/ja-full-domain-classifier-ruri-v3-30m
+      intent_classifier: models/ja-full-intent-classifier-ruri-v3-30m
+      pii_classifier: models/ja-full-pii-detector-ruri-v3-30m
       fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
@@ -2096,23 +2227,32 @@ global:
       prompt_guard:
         enabled: true
         model_ref: prompt_guard
-        model_id: models/mmbert32k-jailbreak-detector-merged
+        model_id: models/ja-full-jailbreak-detector-ruri-v3-30m
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        use_modernbert: true
+        use_mmbert_32k: false
+        jailbreak_mapping_path: models/ja-full-jailbreak-detector-ruri-v3-30m/jailbreak_type_mapping.json
         use_vllm: false
       classifier:
         domain:
           model_ref: domain_classifier
-          model_id: models/mmbert32k-intent-classifier-merged
+          model_id: models/ja-full-domain-classifier-ruri-v3-30m
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          use_modernbert: true
+          use_mmbert_32k: false
+          category_mapping_path: models/ja-full-domain-classifier-ruri-v3-30m/category_mapping.json
           fallback_category: other
+        intent:
+          model_ref: intent_classifier
+          model_id: models/ja-full-intent-classifier-ruri-v3-30m
+          threshold: 0.5
+          use_cpu: true
+          use_modernbert: true
+          use_mmbert_32k: false
+          category_mapping_path: models/ja-full-intent-classifier-ruri-v3-30m/category_mapping.json
+          fallback_category: no_function_needed
         mcp:
           enabled: true
           transport_type: stdio
@@ -2126,14 +2266,14 @@ global:
           timeout_seconds: 15
         pii:
           model_ref: pii_classifier
-          model_id: models/mmbert32k-pii-detector-merged
+          model_id: models/ja-full-pii-detector-ruri-v3-30m
           threshold: 0.9
           use_cpu: true
-          use_mmbert_32k: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          use_mmbert_32k: false
+          pii_mapping_path: models/ja-full-pii-detector-ruri-v3-30m/pii_type_mapping.json
         preference:
           use_contrastive: true
-          embedding_model: models/preference-encoder
+          embedding_model: mmbert
           prototype_scoring:
             enabled: true
             cluster_similarity_threshold: 0.9

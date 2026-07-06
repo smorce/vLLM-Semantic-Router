@@ -470,9 +470,19 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 		return fmt.Errorf("no pending entry found")
 	}
 
-	// Milvus automatically includes the primary key in results but order is non-deterministic
-	// We requested ["model", "query", "request_body"], expect 3-4 columns (primary key may be auto-included)
-	// Strategy: Find the ID column (32-char hex string), then map remaining columns
+	// Milvus automatically includes the primary key in results, but its
+	// position among the returned columns is not guaranteed to match the
+	// requested output_fields order. A previous version of this code guessed
+	// the ID column by checking "is this a 32-char hex string" and then
+	// mapped the remaining columns *positionally* (model, query,
+	// request_body, in that order). When the actual column order differed
+	// from that assumption, a long field (e.g. query or request_body) could
+	// be written into the `model` variable, which then overflowed the
+	// schema's model VARCHAR(256) limit on the follow-up upsert
+	// ("the length (NNN) of 0th string exceeds max length (256)"), silently
+	// dropping the completed cache entry and causing every later lookup for
+	// that request to miss. Match columns by their actual field name instead
+	// of position so this cannot happen regardless of return order.
 	if len(results) < 3 {
 		logging.Debugf("MilvusCache.UpdateWithResponse: unexpected result count: %d", len(results))
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -480,37 +490,21 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	}
 
 	var id, model, query, requestBody string
-	idColIndex := -1
-
-	// First pass: find the ID column (32-char hex string = MD5 hash)
-	for i := 0; i < len(results); i++ {
-		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
-			val := col.Data()[0]
-			if len(val) == 32 && isHexString(val) {
-				id = val
-				idColIndex = i
-				break
-			}
+	for _, result := range results {
+		col, ok := result.(*entity.ColumnVarChar)
+		if !ok || col.Len() == 0 {
+			continue
 		}
-	}
-
-	// Second pass: extract data fields in order, skipping the ID column
-	dataFieldIndex := 0
-	for i := 0; i < len(results); i++ {
-		if i == idColIndex {
-			continue // Skip the primary key column
-		}
-		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
-			val := col.Data()[0]
-			switch dataFieldIndex {
-			case 0:
-				model = val
-			case 1:
-				query = val
-			case 2:
-				requestBody = val
-			}
-			dataFieldIndex++
+		val := col.Data()[0]
+		switch col.Name() {
+		case "id":
+			id = val
+		case "model":
+			model = val
+		case "query":
+			query = val
+		case "request_body":
+			requestBody = val
 		}
 	}
 

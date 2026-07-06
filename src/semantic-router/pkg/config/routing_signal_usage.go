@@ -47,6 +47,12 @@ func (c *RouterConfig) NeedsCategoryMappingForRouting() bool {
 	return c != nil && c.IsCategoryClassifierEnabled() && c.UsesSignalTypeInRouting(SignalTypeDomain)
 }
 
+// NeedsIntentMappingForRouting returns true when routing actually depends on the
+// local file-backed function-call intent classifier assets.
+func (c *RouterConfig) NeedsIntentMappingForRouting() bool {
+	return c != nil && c.IsIntentClassifierEnabled() && c.UsesSignalTypeInRouting(SignalTypeIntent)
+}
+
 // NeedsPIIMappingForRouting returns true when routing actually depends on the
 // local file-backed PII classifier assets.
 func (c *RouterConfig) NeedsPIIMappingForRouting() bool {

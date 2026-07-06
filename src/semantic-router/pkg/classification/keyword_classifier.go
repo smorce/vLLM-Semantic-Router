@@ -10,7 +10,7 @@ import (
 )
 
 // KeywordClassifier implements keyword-based classification logic.
-// It supports regex, bm25, and ngram matching methods per rule.
+// It supports regex (including fuzzy), bm25, and ngram matching methods per rule.
 type KeywordClassifier struct {
 	regexRules []preppedKeywordRule
 
@@ -26,9 +26,23 @@ type ruleRef struct {
 	name   string
 }
 
+// normalizeKeywordRuleMethod maps DSL/runtime method names to the engine used at
+// runtime. "fuzzy" is a regex rule with approximate matching enabled.
+func normalizeKeywordRuleMethod(rule config.KeywordRule) (string, config.KeywordRule) {
+	method := strings.ToLower(strings.TrimSpace(rule.Method))
+	if method == "" {
+		method = "regex"
+	}
+	if method == "fuzzy" {
+		rule.FuzzyMatch = true
+		return "regex", rule
+	}
+	return method, rule
+}
+
 // NewKeywordClassifier creates a new KeywordClassifier.
 // Rules with method "bm25" or "ngram" are dispatched to Rust-backed
-// classifiers; all others use the regex engine.
+// classifiers; regex and fuzzy rules use the regex engine.
 func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, error) {
 	kc := &KeywordClassifier{}
 
@@ -41,10 +55,7 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 			return nil, fmt.Errorf("unsupported keyword rule operator: %q for rule %q", rule.Operator, rule.Name)
 		}
 
-		method := strings.ToLower(rule.Method)
-		if method == "" {
-			method = "regex"
-		}
+		method, _ := normalizeKeywordRuleMethod(rule)
 
 		switch method {
 		case "bm25":
@@ -53,7 +64,7 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 			hasNgram = true
 		case "regex":
 		default:
-			return nil, fmt.Errorf("unsupported keyword rule method: %q for rule %q (valid: regex, bm25, ngram)", rule.Method, rule.Name)
+			return nil, fmt.Errorf("unsupported keyword rule method: %q for rule %q (valid: regex, fuzzy, bm25, ngram)", rule.Method, rule.Name)
 		}
 	}
 
@@ -65,10 +76,7 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 	}
 
 	for _, rule := range cfgRules {
-		method := strings.ToLower(rule.Method)
-		if method == "" {
-			method = "regex"
-		}
+		method, rule := normalizeKeywordRuleMethod(rule)
 
 		switch method {
 		case "bm25":

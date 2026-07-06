@@ -22,7 +22,7 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 	return &classifierOptionBuilder{cfg: cfg, options: options}
 }
 
-func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
+func (b *classifierOptionBuilder) build(categoryMapping, intentMapping *CategoryMapping) ([]option, error) {
 	steps := []func() (option, error){
 		b.buildKeywordClassifierOption,
 		b.buildEmbeddingClassifierOption,
@@ -41,6 +41,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 	}
 	b.options = append(b.options, parallelOptions...)
 	b.addCategoryClassifier(categoryMapping)
+	b.addIntentClassifier(intentMapping)
 	b.addMCPCategoryClassifier()
 	return b.options, nil
 }

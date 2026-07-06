@@ -13,6 +13,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeKeyword:      func(results *SignalResults) []string { return results.MatchedKeywordRules },
 	config.SignalTypeEmbedding:    func(results *SignalResults) []string { return results.MatchedEmbeddingRules },
 	config.SignalTypeDomain:       func(results *SignalResults) []string { return results.MatchedDomainRules },
+	config.SignalTypeIntent:       func(results *SignalResults) []string { return results.MatchedIntentRules },
 	config.SignalTypeFactCheck:    func(results *SignalResults) []string { return results.MatchedFactCheckRules },
 	config.SignalTypeUserFeedback: func(results *SignalResults) []string { return results.MatchedUserFeedbackRules },
 	config.SignalTypeReask:        func(results *SignalResults) []string { return results.MatchedReaskRules },

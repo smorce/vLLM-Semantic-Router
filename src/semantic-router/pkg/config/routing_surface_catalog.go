@@ -23,6 +23,7 @@ var supportedSignalTypes = []string{
 	SignalTypeContext,
 	SignalTypeConversation,
 	SignalTypeDomain,
+	SignalTypeIntent,
 	SignalTypeEmbedding,
 	SignalTypeFactCheck,
 	SignalTypeJailbreak,

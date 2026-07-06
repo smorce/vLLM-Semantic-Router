@@ -6,10 +6,16 @@ import (
 	"strings"
 )
 
+type IntentRule struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
+}
+
 type Signals struct {
 	KeywordRules      []KeywordRule      `yaml:"keyword_rules,omitempty"`
 	EmbeddingRules    []EmbeddingRule    `yaml:"embedding_rules,omitempty"`
 	Categories        []Category         `yaml:"categories"`
+	IntentRules       []IntentRule       `yaml:"intent_rules,omitempty"`
 	FactCheckRules    []FactCheckRule    `yaml:"fact_check_rules,omitempty"`
 	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
 	ReaskRules        []ReaskRule        `yaml:"reask_rules,omitempty"`

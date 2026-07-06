@@ -12,6 +12,7 @@ import requests
 from cli.chat_client import (
     DEFAULT_CHAT_MODEL,
     build_chat_payload,
+    build_local_auth_headers,
     chat_completions_url,
     extract_assistant_text,
     post_chat_completions,
@@ -125,7 +126,12 @@ def chat(
     )
 
     try:
-        resp = post_chat_completions(url=url, payload=payload, timeout=timeout)
+        resp = post_chat_completions(
+            url=url,
+            payload=payload,
+            timeout=timeout,
+            extra_headers=build_local_auth_headers(config),
+        )
     except requests.exceptions.ConnectionError as exc:
         raise click.ClickException(
             f"Could not reach {url}. Is Envoy listening and port-forwarded if needed? ({exc})"

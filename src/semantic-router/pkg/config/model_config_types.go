@@ -3,6 +3,7 @@ package config
 // Classifier represents the configuration for text classification.
 type Classifier struct {
 	CategoryModel    `yaml:"category_model"`
+	IntentModel      CategoryModel `yaml:"intent_model,omitempty"`
 	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
 	PIIModel         `yaml:"pii_model"`
 	PreferenceModel  PreferenceModelConfig `yaml:"preference_model,omitempty"`

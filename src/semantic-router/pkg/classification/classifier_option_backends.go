@@ -26,6 +26,17 @@ func (b *classifierOptionBuilder) addCategoryClassifier(categoryMapping *Categor
 	b.options = append(b.options, withCategory(categoryMapping, categoryInitializer, categoryInference))
 }
 
+func (b *classifierOptionBuilder) addIntentClassifier(intentMapping *CategoryMapping) {
+	if b.cfg.IntentModel.ModelID == "" {
+		return
+	}
+	b.options = append(b.options, withIntent(
+		intentMapping,
+		createIntentInitializer(),
+		createIntentInference(),
+	))
+}
+
 func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 	if !b.cfg.MCPCategoryModel.Enabled {
 		return

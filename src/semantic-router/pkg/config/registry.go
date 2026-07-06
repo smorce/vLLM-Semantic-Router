@@ -398,6 +398,72 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength: 32768,
 		Tags:             []string{"pii", "privacy", "token-classification", "lora", "mmbert-32k", "yarn", "multilingual"},
 	},
+
+	// ============================================================================
+	// Japanese Full Fine-tuned Models (cl-nagoya/ruri-v3-30m base, ModernBERT-Ja)
+	// Reference: src/training/model_classifier/ja_full_finetuning/README.md
+	// Locally trained only; not yet published to Hugging Face.
+	// ============================================================================
+
+	// Japanese Domain Classifier (Full Fine-tuned)
+	{
+		LocalPath:           "models/ja-full-domain-classifier-ruri-v3-30m",
+		RepoID:              "llm-semantic-router/ja-full-domain-classifier-ruri-v3-30m",
+		Aliases:             []string{"ja-full-domain-classifier", "ja-domain-classifier"},
+		Purpose:             PurposeDomainClassification,
+		Description:         "Full fine-tuned Japanese MMLU-style domain classifier based on cl-nagoya/ruri-v3-30m (ModernBERT-Ja)",
+		ParameterSize:       "30M",
+		UsesLoRA:            false,
+		NumClasses:          14,   // MMLU categories
+		MaxContextLength:    512,  // Trained with max_length=512
+		BaseModelMaxContext: 8192, // Base model supports 8192, but use with caution beyond MaxContextLength
+		Tags:                []string{"classification", "japanese", "mmlu", "domain", "modernbert-ja", "ruri"},
+	},
+
+	// Japanese Intent (Function-Call) Classifier (Full Fine-tuned)
+	{
+		LocalPath:           "models/ja-full-intent-classifier-ruri-v3-30m",
+		RepoID:              "llm-semantic-router/ja-full-intent-classifier-ruri-v3-30m",
+		Aliases:             []string{"ja-full-intent-classifier", "ja-intent-classifier"},
+		Purpose:             PurposeDomainClassification,
+		Description:         "Full fine-tuned Japanese function-call intent classifier based on cl-nagoya/ruri-v3-30m (ModernBERT-Ja)",
+		ParameterSize:       "30M",
+		UsesLoRA:            false,
+		NumClasses:          8,    // function-call intent categories
+		MaxContextLength:    256,  // Trained with max_length=256
+		BaseModelMaxContext: 8192, // Base model supports 8192, but use with caution beyond MaxContextLength
+		Tags:                []string{"classification", "japanese", "intent", "function-call", "modernbert-ja", "ruri"},
+	},
+
+	// Japanese PII Detector (Full Fine-tuned)
+	{
+		LocalPath:           "models/ja-full-pii-detector-ruri-v3-30m",
+		RepoID:              "llm-semantic-router/ja-full-pii-detector-ruri-v3-30m",
+		Aliases:             []string{"ja-full-pii-detector", "ja-pii-detector"},
+		Purpose:             PurposePIIDetection,
+		Description:         "Full fine-tuned Japanese PII detector (token classification) based on cl-nagoya/ruri-v3-30m (ModernBERT-Ja)",
+		ParameterSize:       "30M",
+		UsesLoRA:            false,
+		NumClasses:          23,   // 11 entity types x2 (B/I) + O
+		MaxContextLength:    384,  // Trained with max_length=384
+		BaseModelMaxContext: 8192, // Base model supports 8192, but use with caution beyond MaxContextLength
+		Tags:                []string{"pii", "privacy", "japanese", "token-classification", "modernbert-ja", "ruri"},
+	},
+
+	// Japanese Jailbreak Detector (Full Fine-tuned)
+	{
+		LocalPath:           "models/ja-full-jailbreak-detector-ruri-v3-30m",
+		RepoID:              "llm-semantic-router/ja-full-jailbreak-detector-ruri-v3-30m",
+		Aliases:             []string{"ja-full-jailbreak-detector", "ja-jailbreak-detector"},
+		Purpose:             PurposeJailbreakDetection,
+		Description:         "Full fine-tuned Japanese jailbreak/prompt injection detector based on cl-nagoya/ruri-v3-30m (ModernBERT-Ja)",
+		ParameterSize:       "30M",
+		UsesLoRA:            false,
+		NumClasses:          2,    // benign/jailbreak
+		MaxContextLength:    512,  // Trained with max_length=512
+		BaseModelMaxContext: 8192, // Base model supports 8192, but use with caution beyond MaxContextLength
+		Tags:                []string{"safety", "jailbreak", "japanese", "prompt-injection", "modernbert-ja", "ruri"},
+	},
 }
 
 // GetModelByPath returns a model spec by its local path or alias

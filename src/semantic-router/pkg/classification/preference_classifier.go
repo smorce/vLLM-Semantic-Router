@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"errors"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -44,6 +45,10 @@ func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []co
 
 // Classify determines the best route preference for the given conversation
 func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceResult, error) {
+	if p == nil || !p.IsInitialized() {
+		return nil, errors.New("preference classifier is not initialized")
+	}
+
 	if p.useContrastive {
 		return p.classifyContrastive(conversationJSON)
 	}

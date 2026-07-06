@@ -250,6 +250,16 @@ func defaultClassifierModule() CanonicalClassifierModule {
 				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
 			},
 		},
+		Intent: CanonicalCategoryModule{
+			ModelRef: "intent_classifier",
+			CategoryModel: CategoryModel{
+				Threshold:           0.5,
+				UseCPU:              true,
+				UseMmBERT32K:        false,
+				UseModernBERT:       false,
+				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+			},
+		},
 		PII: CanonicalPIIModule{
 			ModelRef: "pii_classifier",
 			PIIModel: PIIModel{
@@ -315,6 +325,7 @@ func DefaultSystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
 		PromptGuard:            "models/mmbert32k-jailbreak-detector-merged",
 		DomainClassifier:       "models/mmbert32k-intent-classifier-merged",
+		IntentClassifier:       "models/mmbert32k-intent-classifier-merged",
 		PIIClassifier:          "models/mmbert32k-pii-detector-merged",
 		FactCheckClassifier:    "models/mmbert32k-factcheck-classifier-merged",
 		HallucinationDetector:  "models/mom-halugate-detector",

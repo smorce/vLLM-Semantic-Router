@@ -621,7 +621,7 @@ var _ = Describe("Security Checks", func() {
 			piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, nil, piiMapping, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -873,7 +873,7 @@ var _ = Describe("Security Checks", func() {
 			piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, nil, piiMapping, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1024,7 +1024,7 @@ var _ = Describe("Security Checks", func() {
 			}
 
 			var err error
-			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, jailbreakMapping)
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, nil, router.Classifier.PIIMapping, jailbreakMapping)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

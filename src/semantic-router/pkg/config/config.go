@@ -25,6 +25,7 @@ const (
 	SignalTypeKeyword      = "keyword"
 	SignalTypeEmbedding    = "embedding"
 	SignalTypeDomain       = "domain"
+	SignalTypeIntent       = "intent"
 	SignalTypeFactCheck    = "fact_check"
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypeReask        = "reask"

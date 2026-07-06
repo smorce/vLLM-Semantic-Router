@@ -371,6 +371,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 	case SignalTypeKeyword,
 		SignalTypeEmbedding,
 		SignalTypeDomain,
+		SignalTypeIntent,
 		SignalTypeFactCheck,
 		SignalTypeUserFeedback,
 		SignalTypeReask,
@@ -399,6 +400,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeKeyword:      collectKeywordRuleNames(cfg.KeywordRules),
 		SignalTypeEmbedding:    collectEmbeddingRuleNames(cfg.EmbeddingRules),
 		SignalTypeDomain:       collectDomainNames(cfg.Categories),
+		SignalTypeIntent:       collectIntentNames(cfg.IntentRules),
 		SignalTypeFactCheck:    collectFactCheckRuleNames(cfg.FactCheckRules),
 		SignalTypeUserFeedback: collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
 		SignalTypeReask:        collectReaskRuleNames(cfg.ReaskRules),
@@ -567,6 +569,14 @@ func collectDomainNames(categories []Category) map[string]struct{} {
 	names := make(map[string]struct{}, len(categories))
 	for _, category := range categories {
 		names[category.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectIntentNames(rules []IntentRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
 	}
 	return names
 }

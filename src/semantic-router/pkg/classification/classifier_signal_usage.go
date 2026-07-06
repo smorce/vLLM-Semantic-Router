@@ -35,6 +35,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeKeyword, c.Config.KeywordRules, func(r config.KeywordRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeEmbedding, c.Config.EmbeddingRules, func(r config.EmbeddingRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeDomain, c.Config.Categories, func(r config.Category) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeIntent, c.Config.IntentRules, func(r config.IntentRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeFactCheck, c.Config.FactCheckRules, func(r config.FactCheckRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeUserFeedback, c.Config.UserFeedbackRules, func(r config.UserFeedbackRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeReask, c.Config.ReaskRules, func(r config.ReaskRule) string { return r.Name })

@@ -25,6 +25,16 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 		})
 	}
 
+	if cfg.NeedsIntentMappingForRouting() {
+		mappings.intentMapping, err = classification.LoadCategoryMapping(cfg.IntentModel.CategoryMappingPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load intent mapping: %w", err)
+		}
+		logging.ComponentEvent("extproc", "intent_mapping_loaded", map[string]interface{}{
+			"count": mappings.intentMapping.GetCategoryCount(),
+		})
+	}
+
 	if cfg.NeedsPIIMappingForRouting() {
 		mappings.piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
 		if err != nil {
@@ -147,6 +157,7 @@ func createRouterClassifier(
 	classifier, err := classification.BuildClassifier(
 		cfg,
 		mappings.categoryMapping,
+		mappings.intentMapping,
 		mappings.piiMapping,
 		mappings.jailbreakMapping,
 	)
